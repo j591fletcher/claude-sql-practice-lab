@@ -1,0 +1,48 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git pull *)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(git merge *)",
+      "Bash(git stash *)",
+      "Bash(git restore *)",
+      "Bash(npm run dev)",
+      "Bash(npm start)",
+      "Bash(npm run start)",
+      "Bash(npm test)",
+      "Bash(npm run test)",
+      "Bash(pytest *)",
+      "Bash(npm run build)"
+    ],
+    "deny": [
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(ssh *)",
+      "Bash(scp *)",
+      "Bash(ftp *)",
+      "Bash(telnet *)",
+      "Bash(nc *)",
+      "Bash(rm *)",
+      "Bash(rmdir *)",
+      "Bash(git clean *)",
+      "Bash(npm install)",
+      "Bash(npm install *)",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(conda install *)",
+      "Bash(yarn add *)",
+      "Bash(pnpm add *)",
+      "Bash(apt install *)",
+      "Bash(apt-get install *)",
+      "Bash(choco install *)",
+      "Bash(winget install *)",
+      "Bash(cargo install *)",
+      "Bash(gem install *)"
+    ]
+  }
+}
