@@ -21,6 +21,14 @@ progressDb.run(`
     last_practiced TEXT    NOT NULL
   )
 `);
+progressDb.run(`
+  CREATE TABLE IF NOT EXISTS recent_problems (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic        TEXT    NOT NULL,
+    problem_text TEXT    NOT NULL,
+    generated_at TEXT    NOT NULL
+  )
+`);
 
 // In-memory store: problemId → { db, expectedRows }
 const pendingProblems = new Map();
@@ -94,11 +102,99 @@ const MULTI_TABLE_TOPICS = new Set([
   'SELF JOIN', 'CROSS JOIN', 'UNION / UNION ALL', 'INTERSECT & EXCEPT',
 ]);
 
+const TOPIC_CONTEXT = {
+  'SELECT':              'The question must ask for specific columns — not SELECT *. It should be clear why those columns are useful together.',
+  'WHERE':               'The question must require filtering rows on a meaningful condition. The filter should narrow the result set significantly — not return nearly everything.',
+  'GROUP BY':            'The question must require aggregating rows by one or more columns. Make clear what to group and what to measure — not just "summarize the data."',
+  'HAVING':              'The question must require filtering on an aggregate. The condition should only make sense after grouping — it cannot be solved with WHERE alone.',
+  'ORDER BY':            'The question must require sorting in a specific, motivated way. The sort column and direction should be clearly justified by the question.',
+  'INNER JOIN':          'The question must require combining data from two tables via a shared relationship. It should be obvious that neither table alone can answer it.',
+  'LEFT JOIN':           'The question must depend on the fact that some left-table rows may have no match in the right table. The answer changes meaningfully if an INNER JOIN were used instead.',
+  'RIGHT JOIN':          'The question must depend on preserving all rows from the right table regardless of whether a match exists in the left table.',
+  'FULL OUTER JOIN':     'The question must require showing rows from both tables even when no match exists on either side.',
+  'SELF JOIN':           'The question must require joining the table to itself to compare or relate rows within the same table.',
+  'CROSS JOIN':          'The question must produce a meaningful Cartesian product — every combination of rows from two tables.',
+  'UNION / UNION ALL':   'The question must require combining result sets from two separate queries. Make it clear whether duplicates matter (UNION vs UNION ALL).',
+  'INTERSECT & EXCEPT':  'The question must use set operations: INTERSECT to find common rows between two queries, or EXCEPT to find rows in one set but not another.',
+  'SUBQUERY':            'The question must require a query nested inside another. The inner query result must feed the outer query — it cannot be flattened into a single-level query easily.',
+  'AGGREGATE FUNCTIONS': 'The question must use one or more aggregate functions (COUNT, SUM, AVG, MIN, MAX) to compute a summary from multiple rows.',
+  'CTE':                 'The question must require a WITH clause to break a complex query into readable steps. The CTE result must be meaningfully reused in the main query.',
+  'WINDOW FUNCTIONS':    'The question must require a calculation across a set of related rows without collapsing them into a single output row.',
+};
+
+const TOPIC_ANGLES = {
+  'SELECT':               ['use column aliases', 'use DISTINCT', 'compute a derived column with arithmetic or string functions'],
+  'WHERE':                ['use a range condition (BETWEEN or comparisons)', 'use LIKE for pattern matching', 'combine AND/OR with multiple conditions', 'use IN with a list of values'],
+  'GROUP BY':             ['group by a single column with COUNT(*)', 'group by two columns at once', 'use SUM or AVG instead of COUNT', 'combine with ORDER BY to rank groups'],
+  'HAVING':               ['filter groups where an aggregate exceeds a threshold', 'use HAVING with COUNT to find groups with more than N members', 'combine HAVING with a WHERE clause'],
+  'ORDER BY':             ['sort descending by a numeric column', 'sort by multiple columns with mixed directions', 'combine ORDER BY with LIMIT for top-N results'],
+  'INNER JOIN':           ['join and filter the result with WHERE', 'join and aggregate across both tables', 'join and order by a column from the second table'],
+  'LEFT JOIN':            ['find rows in the left table with no match (NULL check)', 'left join and count matches per left-table row', 'left join with a filter that reveals unmatched rows'],
+  'SUBQUERY':             ['use a subquery in WHERE with IN', 'use a subquery in the FROM clause as a derived table', 'use EXISTS'],
+  'AGGREGATE FUNCTIONS':  ['combine multiple aggregates in one query', 'use aggregate on a filtered subset', 'combine with GROUP BY'],
+  'CTE':                  ['use a CTE to pre-filter before the main query', 'use a CTE to compute an aggregate reused in the main query', 'chain two CTEs'],
+  'WINDOW FUNCTIONS':     ['use ROW_NUMBER() to rank within a partition', 'use SUM() OVER() for a running total', 'use RANK() or DENSE_RANK()', 'use LAG() or LEAD()'],
+  'UNION / UNION ALL':    ['combine results from two queries with different filters', 'use UNION ALL then aggregate the combined result'],
+  'INTERSECT & EXCEPT':   ['use EXCEPT to find rows in one set but not another', 'use INTERSECT to find common rows between two queries'],
+};
+
+function pickAngle(topic) {
+  const angles = TOPIC_ANGLES[topic];
+  if (!angles || angles.length === 0) return null;
+  return angles[Math.floor(Math.random() * angles.length)];
+}
+
+function getRecentProblems(topic, limit = 7) {
+  return new Promise((resolve, reject) => {
+    progressDb.all(
+      'SELECT problem_text FROM recent_problems WHERE topic = ? ORDER BY generated_at DESC LIMIT ?',
+      [topic, limit],
+      (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows.map((r) => r.problem_text));
+      }
+    );
+  });
+}
+
+function saveRecentProblem(topic, problemText) {
+  const now = new Date().toISOString();
+  progressDb.run(
+    'INSERT INTO recent_problems (topic, problem_text, generated_at) VALUES (?, ?, ?)',
+    [topic, problemText, now],
+    () => {
+      progressDb.run(
+        `DELETE FROM recent_problems WHERE topic = ? AND id NOT IN (
+          SELECT id FROM recent_problems WHERE topic = ? ORDER BY generated_at DESC LIMIT 10
+        )`,
+        [topic, topic]
+      );
+    }
+  );
+}
+
 function getTableSchema(database, table) {
   return new Promise((resolve, reject) => {
-    database.all(`PRAGMA table_info(${table})`, (err, rows) => {
+    database.all(`PRAGMA table_info("${table}")`, (err, rows) => {
       if (err) return reject(err);
-      resolve(rows.map((r) => `${r.name} (${r.type})`).join(', '));
+      const cols = rows.map((r) => {
+        let desc = `  ${r.name} ${r.type || 'TEXT'}`;
+        const flags = [];
+        if (r.pk) flags.push('PRIMARY KEY');
+        if (r.notnull && !r.pk) flags.push('NOT NULL');
+        if (flags.length) desc += ` (${flags.join(', ')})`;
+        return desc;
+      });
+      resolve(cols.join('\n'));
+    });
+  });
+}
+
+function getTableForeignKeys(database, table) {
+  return new Promise((resolve, reject) => {
+    database.all(`PRAGMA foreign_key_list("${table}")`, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows.map((r) => `  ${r.from} → ${r.table}.${r.to}`));
     });
   });
 }
@@ -176,18 +272,32 @@ app.post('/api/generate-problem', async (req, res) => {
       const selectedTables = needsMultiple ? pickRandom(allTables, 2) : pickRandom(allTables, 1);
 
       try {
-        const [schemas, samples] = await Promise.all([
+        const [schemas, samples, fkLists, recentProblems] = await Promise.all([
           Promise.all(selectedTables.map((t) => getTableSchema(database, t))),
           Promise.all(selectedTables.map((t) => getSampleRows(database, t, 3))),
+          Promise.all(selectedTables.map((t) => getTableForeignKeys(database, t))),
+          getRecentProblems(topic),
         ]);
 
-        const schemaBlock = selectedTables.map((t, i) =>
-          `Table "${t}": ${schemas[i]}\nSample rows: ${JSON.stringify(samples[i])}`
-        ).join('\n\n');
+        const schemaBlock = selectedTables.map((t, i) => {
+          let block = `Table "${t}":\n${schemas[i]}`;
+          if (fkLists[i].length > 0) block += `\nForeign keys:\n${fkLists[i].join('\n')}`;
+          block += `\nSample rows: ${JSON.stringify(samples[i])}`;
+          return block;
+        }).join('\n\n');
 
-        const rules = '- problem: 1–3 sentences. Reference specific column names. Do NOT ask for details of a single named item. Do NOT reveal the SQL.\n- sql: Must return at least 2 rows. Do NOT filter to a single exact value (e.g. WHERE name = \'X\'). Use sample values only as reference for ranges, categories, or patterns (e.g. WHERE price > 400, WHERE name LIKE \'B%\').';
+        const rules = '- problem: 1–3 sentences. Name specific columns from the schema. Ask for patterns, ranges, or categories across multiple rows. Describe the desired result — not the SQL steps to get there.\n- sql: Must return at least 5 rows. Filter using ranges, patterns, or categories drawn from the sample data (e.g. WHERE price > 400, WHERE name LIKE \'B%\'). Every column mentioned in the problem must appear in the SELECT.';
 
-        const prompt = `You are a SQL interview coach. Return ONLY valid JSON: {"problem":"...","sql":"..."}\n\n${schemaBlock}\nTopic: ${topic}\n\n${rules}`;
+        let varietyBlock = '';
+        if (recentProblems.length > 0) {
+          varietyBlock += `\n\nYou have already given me these problems for this topic — do NOT repeat the same patterns, column combinations, or question structure:\n` +
+            recentProblems.map((p, i) => `${i + 1}. "${p}"`).join('\n');
+        }
+        const angle = pickAngle(topic);
+        if (angle) varietyBlock += `\n\nAngle to take for this problem: ${angle}`;
+
+        const topicContext = TOPIC_CONTEXT[topic] ? `\nContext: ${TOPIC_CONTEXT[topic]}` : '';
+        const prompt = `You are a SQL interview coach. Return ONLY valid JSON: {"problem":"...","sql":"..."}\n\n${schemaBlock}\nTopic: ${topic}${topicContext}\n\n${rules}${varietyBlock}`;
 
         let problemText = `Write a SQL query on ${selectedTables.join(' and ')} practising ${topic}.`;
         let source = 'fallback';
@@ -207,6 +317,7 @@ app.post('/api/generate-problem', async (req, res) => {
               const expectedRows = await queryRows(database, parsed.sql);
               problemId = randomUUID();
               pendingProblems.set(problemId, { db, expectedRows, sql: parsed.sql, topic, schemaBlock, problemText: parsed.problem });
+              saveRecentProblem(topic, parsed.problem);
               console.log(`Stored expected answer for problemId ${problemId} (${expectedRows.length} rows)`);
             } catch (sqlErr) {
               console.warn('Expected SQL failed to execute:', sqlErr.message);
@@ -307,7 +418,7 @@ app.post('/api/generate-hint', async (req, res) => {
   const pending = pendingProblems.get(problemId);
   if (!pending) return res.status(404).json({ error: 'Problem not found — generate a new one.' });
 
-  const hintPrompt = `You are a SQL tutor. A student is stuck on this problem:\n\n"${pending.problemText}"\n\nTopic: ${pending.topic}\n${pending.schemaBlock}\nCorrect SQL: ${pending.sql}\n\nGive ONE concise hint (1-2 sentences). Do NOT reveal the SQL or exact values used. Guide toward the approach or SQL concept only.`;
+  const hintPrompt = `You are a SQL tutor helping me practice. I am stuck on this problem:\n\n"${pending.problemText}"\n\nTopic: ${pending.topic}\n${pending.schemaBlock}\nCorrect SQL (for your reference only — do not share it): ${pending.sql}\n\nGive me ONE hint (1–2 sentences) that:\n- Names the key SQL clause or concept I should apply\n- Points me toward the relevant columns or tables to use\n- Leaves the actual query for me to figure out\n\nWrite the hint directly to me. Be concrete. Write no SQL.`;
 
   try {
     const hint = await generateProblemFromOllama(hintPrompt);
