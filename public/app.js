@@ -21,6 +21,7 @@ let activeDatabase = null;
 let availableTables = [];
 let selectedTopic = TOPICS.easy[0];
 let activeDiff = 'easy';
+let topicBarCollapsed = localStorage.getItem('topicBarCollapsed') === 'true';
 const activeSchemaTables = new Set();
 let editor = null;
 let allSchemaHints = {};
@@ -28,6 +29,18 @@ let topicProgress = {};
 let currentProblemId = null;
 let currentProblemSolved = false;
 let wrongAnswerCount = 0;
+
+// ── Topic bar collapse ──
+function setTopicBarCollapsed(val) {
+  topicBarCollapsed = val;
+  localStorage.setItem('topicBarCollapsed', val);
+  document.getElementById('topicBar').classList.toggle('collapsed', val);
+  document.getElementById('difficultyTabs').classList.toggle('collapsed', val);
+  const toggle = document.getElementById('topicToggle');
+  toggle.textContent = `Topic: ${selectedTopic} ▾`;
+}
+
+document.getElementById('topicToggle').addEventListener('click', () => setTopicBarCollapsed(false));
 
 // ── Difficulty tabs ──
 document.querySelectorAll('.diff-tab').forEach((tab) => {
@@ -63,9 +76,12 @@ function renderTopicPills() {
       selectedTopic = topic;
       document.querySelectorAll('.topic-pill').forEach((p) => p.classList.remove('selected'));
       pill.classList.add('selected');
+      setTopicBarCollapsed(true);
     });
     bar.appendChild(pill);
   });
+
+  document.getElementById('topicToggle').textContent = `Topic: ${selectedTopic} ▾`;
 }
 
 // ── Resize ──
@@ -433,6 +449,7 @@ async function initialize() {
   }));
 
   renderTopicPills();
+  setTopicBarCollapsed(topicBarCollapsed);
 }
 
 document.getElementById('generateProblem').addEventListener('click', generateProblem);

@@ -77,7 +77,40 @@ body { font-family: Inter, system-ui, sans-serif; color: var(--text); background
   background: var(--surface2);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  max-height: 200px;
+  overflow: hidden;
+  opacity: 1;
+  transition: max-height 0.2s ease, opacity 0.2s ease, padding 0.2s ease;
 }
+
+.topic-bar.collapsed {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* Hide diff tabs and show toggle button when collapsed */
+.difficulty-tabs .topic-toggle-btn { display: none; }
+.difficulty-tabs.collapsed .diff-tab { display: none; }
+.difficulty-tabs.collapsed .topic-toggle-btn { display: inline-flex; }
+
+.topic-toggle-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 5px 14px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.topic-toggle-btn:hover { border-color: var(--muted); color: var(--accent); }
 
 .topic-pill {
   background: transparent;
