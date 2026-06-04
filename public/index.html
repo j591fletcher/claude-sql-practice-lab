@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SQL Practice</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <span class="topbar-title">SQL Practice</span>
+        <div class="difficulty-tabs">
+          <button class="diff-tab active" data-diff="easy">Easy</button>
+          <button class="diff-tab" data-diff="intermediate">Intermediate</button>
+          <button class="diff-tab" data-diff="advanced">Advanced</button>
+        </div>
+        <button id="validateSql">&#9654; Run Query</button>
+        <button id="hintBtn" class="btn-hint" disabled>&#x3F; Hint</button>
+        <button id="submitAnswer" class="btn-submit">&#10003; Test Solution</button>
+      </header>
+
+      <div class="topic-bar" id="topicBar"></div>
+
+      <div class="workspace">
+        <aside class="sidebar">
+          <div class="problem-header">
+            <div class="problem-header-text">
+              <div class="sidebar-label">Practice Problem</div>
+              <div class="problem-header-sub">AI-generated for your selected topic</div>
+            </div>
+            <button id="generateProblem">Generate</button>
+          </div>
+
+          <div id="tablesSection" class="tables-section" style="display:none">
+            <div class="tables-row">
+              <span class="sidebar-label">Tables</span>
+              <div id="tableChips" class="table-chips-row"></div>
+            </div>
+          </div>
+
+          <div class="sidebar-section problem-section">
+            <pre id="problemText" class="problem-box no-meta">Pick a topic above, then click Generate.</pre>
+            <div id="problemMeta" class="problem-meta" style="display:none">
+              <span class="source-dot" id="sourceDot"></span>
+              <span class="source-model" id="sourceModel"></span>
+            </div>
+          </div>
+          <div id="hintSection" class="hint-section" style="display:none">
+            <div class="sidebar-label">Hint</div>
+            <div id="hintText" class="hint-text"></div>
+          </div>
+
+          <div id="solutionSection" class="solution-section" style="display:none">
+            <div class="solution-header">
+              <span class="sidebar-label">Solution</span>
+              <button id="revealSolutionBtn" class="btn-reveal">Reveal</button>
+            </div>
+            <pre id="solutionCode" class="solution-code solution-blurred"></pre>
+          </div>
+        </aside>
+
+        <div id="schemaDrawer" class="schema-drawer">
+          <div class="schema-drawer-header">
+            <span class="schema-drawer-title">Schema</span>
+            <button class="schema-close-btn" id="schemaCloseBtn">✕</button>
+          </div>
+          <div id="schemaDrawerContent" class="schema-drawer-content"></div>
+        </div>
+
+        <div class="main">
+          <div class="editor-pane">
+            <textarea id="sqlInput" spellcheck="false" placeholder="-- Write your SQL here&#10;-- Ctrl+Enter to run"></textarea>
+          </div>
+
+          <div class="resize-handle" id="resizeHandle">
+            <div class="resize-grip"></div>
+          </div>
+
+          <div class="results-pane" id="resultsPane">
+            <div class="results-header">Results</div>
+            <div id="resultArea" class="result-scroll">Query results will appear here.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/sql-hint.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
