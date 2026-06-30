@@ -4,75 +4,100 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SQL Practice</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css" />
   </head>
   <body>
     <div class="app">
       <header class="topbar">
-        <span class="topbar-title">SQL Practice</span>
-        <div class="difficulty-tabs" id="difficultyTabs">
-          <button class="diff-tab active" data-diff="easy">Easy</button>
-          <button class="diff-tab" data-diff="intermediate">Intermediate</button>
-          <button class="diff-tab" data-diff="advanced">Advanced</button>
-          <button class="topic-toggle-btn" id="topicToggle"></button>
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">◆</span>
+          <h1 class="brand-name">SQL Practice</h1>
         </div>
-        <button id="validateSql">&#9654; Run Query</button>
-        <button id="hintBtn" class="btn-hint" disabled>&#x3F; Hint</button>
-        <button id="submitAnswer" class="btn-submit">&#10003; Test Solution</button>
-      </header>
 
-      <div class="topic-bar" id="topicBar"></div>
+        <div class="stats">
+          <button class="stat-chip stat-chip--ring" id="mapBtn" aria-label="Open the Mastery Map" title="Open the Mastery Map">
+            <span class="ring-wrap" aria-hidden="true">
+              <svg viewBox="0 0 32 32" class="ring-svg">
+                <circle class="ring-bg" cx="16" cy="16" r="13"></circle>
+                <circle id="ringFg" class="ring-fg" cx="16" cy="16" r="13"></circle>
+              </svg>
+              <span class="ring-pct" id="ringPct">0%</span>
+            </span>
+            <span class="stat-text"><b id="statMastered">0/33</b><span>mastered</span></span>
+            <span class="stat-cta" aria-hidden="true">◈ Map</span>
+          </button>
+
+          <div class="stat-chip">
+            <span class="stat-ico" aria-hidden="true">✦</span>
+            <span class="stat-text"><b id="statSolves">0</b><span>solves</span></span>
+          </div>
+        </div>
+      </header>
 
       <div class="workspace">
         <aside class="sidebar">
-          <div class="problem-header">
-            <div class="problem-header-text">
-              <div class="sidebar-label">Practice Problem</div>
-              <div class="problem-header-sub">AI-generated for your selected topic</div>
+          <section class="panel setup-panel">
+            <h2 class="panel-step"><span class="step-num" aria-hidden="true">1</span> Pick a topic</h2>
+            <div class="seg" id="difficultyTabs" role="group" aria-label="Difficulty">
+              <button class="diff-tab active" data-diff="easy" aria-pressed="true">Easy</button>
+              <button class="diff-tab" data-diff="intermediate" aria-pressed="false">Intermediate</button>
+              <button class="diff-tab" data-diff="advanced" aria-pressed="false">Advanced</button>
             </div>
-            <button id="generateProblem">Generate</button>
-          </div>
+            <div class="topic-chips" id="topicBar" role="group" aria-label="Topics"></div>
 
-          <div id="tablesSection" class="tables-section" style="display:none">
-            <div class="tables-row">
-              <span class="sidebar-label">Tables</span>
+            <button id="generateProblem" class="btn-generate">✨ Generate Problem</button>
+
+            <h2 class="panel-step problem-step"><span class="step-num" aria-hidden="true">2</span> Your problem</h2>
+
+            <div id="tablesSection" class="tables-section" style="display:none">
+              <span class="mini-label">Tables</span>
               <div id="tableChips" class="table-chips-row"></div>
             </div>
-          </div>
 
-          <div class="sidebar-section problem-section">
-            <pre id="problemText" class="problem-box no-meta">Pick a topic above, then click Generate.</pre>
+            <div id="problemText" class="problem-box" aria-live="polite">Pick a topic above, then hit Generate to get your first problem.</div>
             <div id="problemMeta" class="problem-meta" style="display:none">
-              <span class="source-dot" id="sourceDot"></span>
+              <span class="source-dot" id="sourceDot" aria-hidden="true"></span>
               <span class="source-model" id="sourceModel"></span>
             </div>
-          </div>
-          <div id="hintSection" class="hint-section" style="display:none">
-            <div class="sidebar-label">Hint</div>
-            <div id="hintText" class="hint-text"></div>
+          </section>
+
+          <div id="hintSection" class="panel hint-section" style="display:none">
+            <div class="mini-label"><span aria-hidden="true">💡</span> Hint</div>
+            <div id="hintText" class="hint-text" aria-live="polite"></div>
           </div>
 
-          <div id="solutionSection" class="solution-section" style="display:none">
+          <div id="solutionSection" class="panel solution-section" style="display:none">
             <div class="solution-header">
-              <span class="sidebar-label">Solution</span>
+              <span class="mini-label">Solution</span>
               <button id="revealSolutionBtn" class="btn-reveal">Reveal</button>
             </div>
             <pre id="solutionCode" class="solution-code solution-blurred"></pre>
           </div>
         </aside>
 
-        <div id="schemaDrawer" class="schema-drawer">
+        <div id="schemaDrawer" class="schema-drawer" role="region" aria-label="Table schema">
           <div class="schema-drawer-header">
             <span class="schema-drawer-title">Schema</span>
-            <button class="schema-close-btn" id="schemaCloseBtn">✕</button>
+            <button class="schema-close-btn" id="schemaCloseBtn" aria-label="Close schema panel">✕</button>
           </div>
           <div id="schemaDrawerContent" class="schema-drawer-content"></div>
         </div>
 
-        <div class="main">
+        <main class="main">
+          <div class="editor-toolbar">
+            <h2 class="panel-step"><span class="step-num" aria-hidden="true">3</span> Write your SQL</h2>
+            <div class="editor-actions">
+              <button id="validateSql" class="btn-run"><span aria-hidden="true">&#9654;</span> Run</button>
+              <button id="hintBtn" class="btn-hint" disabled><span aria-hidden="true">&#x3F;</span> Hint</button>
+              <button id="submitAnswer" class="btn-submit"><span aria-hidden="true">&#10003;</span> Test Solution</button>
+            </div>
+          </div>
+
           <div class="editor-pane">
             <textarea id="sqlInput" spellcheck="false" placeholder="-- Write your SQL here&#10;-- Ctrl+Enter to run"></textarea>
           </div>
@@ -83,11 +108,32 @@
 
           <div class="results-pane" id="resultsPane">
             <div class="results-header">Results</div>
-            <div id="resultArea" class="result-scroll">Query results will appear here.</div>
+            <div id="resultArea" class="result-scroll" role="region" aria-label="Query results" aria-live="polite">Run a query to see results here.</div>
           </div>
-        </div>
+        </main>
       </div>
     </div>
+
+    <!-- ── Mastery Map modal ── -->
+    <div class="mm-overlay" id="mapOverlay">
+      <div class="mm-panel" role="dialog" aria-modal="true" aria-labelledby="mmTitle">
+        <div class="mm-header">
+          <div class="mm-title-wrap">
+            <h2 class="mm-title" id="mmTitle"><span aria-hidden="true">◈ </span>Mastery Map</h2>
+            <span class="mm-summary" id="mmSummary"></span>
+          </div>
+          <button class="mm-close" id="mmCloseBtn" aria-label="Close Mastery Map">✕</button>
+        </div>
+        <div class="mm-legend">
+          <span class="mm-leg"><i class="mm-pip bronze on"></i> Bronze</span>
+          <span class="mm-leg"><i class="mm-pip silver on"></i> Silver</span>
+          <span class="mm-leg"><i class="mm-pip gold on"></i> Gold</span>
+          <span class="mm-leg mm-leg-muted">Click a topic to practice it · thresholds scale by difficulty</span>
+        </div>
+        <div class="mm-columns" id="mmColumns"></div>
+      </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
