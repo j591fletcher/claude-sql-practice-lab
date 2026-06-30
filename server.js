@@ -30,6 +30,33 @@ progressDb.run(`
   )
 `);
 
+// ── Topic-consolidation migration ──
+// Some granular topics were merged into broader ones. Fold any progress and
+// recent-problem history stored under the old names into the new name so no
+// practice counts are lost. Idempotent: once old rows are gone it no-ops.
+const TOPIC_MIGRATIONS = {
+  'COUNT': 'Aggregate Functions',
+  'SUM': 'Aggregate Functions',
+  'AVG': 'Aggregate Functions',
+  'MIN & MAX': 'Aggregate Functions',
+  'Multiple CTEs': 'CTEs',
+};
+progressDb.serialize(() => {
+  for (const [oldTopic, newTopic] of Object.entries(TOPIC_MIGRATIONS)) {
+    // Merge the count into the new topic (summing if it already exists).
+    progressDb.run(
+      `INSERT INTO topic_progress (topic, count, last_practiced)
+         SELECT ?, count, last_practiced FROM topic_progress WHERE topic = ?
+       ON CONFLICT(topic) DO UPDATE SET
+         count = count + excluded.count,
+         last_practiced = MAX(topic_progress.last_practiced, excluded.last_practiced)`,
+      [newTopic, oldTopic]
+    );
+    progressDb.run('DELETE FROM topic_progress WHERE topic = ?', [oldTopic]);
+    progressDb.run('UPDATE recent_problems SET topic = ? WHERE topic = ?', [newTopic, oldTopic]);
+  }
+});
+
 // In-memory store: problemId → { db, expectedRows }
 const pendingProblems = new Map();
 
@@ -98,8 +125,7 @@ app.get('/api/schema', (req, res) => {
 });
 
 const MULTI_TABLE_TOPICS = new Set([
-  'INNER JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'FULL OUTER JOIN',
-  'SELF JOIN', 'CROSS JOIN', 'UNION / UNION ALL', 'INTERSECT & EXCEPT',
+  'JOINs', 'UNION / UNION ALL', 'INTERSECT & EXCEPT',
 ]);
 
 const TOPIC_CONTEXT = {
@@ -119,14 +145,11 @@ const TOPIC_CONTEXT = {
   'SUM':                 'The question must require totaling a numeric column across multiple rows. The result should be a single meaningful total — not a per-row calculation.',
   'AVG':                 'The question must require computing the mean of a numeric column. Make it clear what population of rows is being averaged.',
   'MIN & MAX':           'The question must require finding both the smallest and largest value in a column in a single query. Contrast them meaningfully rather than asking for just one.',
+  'Aggregate Functions': 'The question must require summarizing many rows into a single value using one or more aggregate functions (COUNT, SUM, AVG, MIN, MAX). Pick whichever aggregate(s) the question genuinely needs, and make the summary meaningful — not a per-row calculation.',
   // ── Intermediate ──
   'GROUP BY':            'The question must require aggregating rows by one or more columns. Make clear what to group and what to measure — not just "summarize the data."',
   'HAVING':              'The question must require filtering on an aggregate. The condition should only make sense after grouping — it cannot be solved with WHERE alone.',
-  'INNER JOIN':          'The question must require combining data from two tables via a shared relationship. It should be obvious that neither table alone can answer it.',
-  'LEFT JOIN':           'The question must depend on the fact that some left-table rows may have no match in the right table. The answer changes meaningfully if an INNER JOIN were used instead.',
-  'RIGHT JOIN':          'The question must depend on preserving all rows from the right table regardless of whether a match exists in the left table.',
-  'FULL OUTER JOIN':     'The question must require showing rows from both tables even when no match exists on either side.',
-  'SELF JOIN':           'The question must require joining the table to itself to compare or relate rows within the same table.',
+  'JOINs':               'The question must require combining rows across tables via a shared relationship, and must require exactly ONE specific kind of join to answer correctly — INNER, LEFT, RIGHT, FULL OUTER, or SELF — chosen randomly. Critically, the question wording must NOT name or hint at which join type is needed; the solver should have to reason about whether unmatched rows must be preserved (outer joins), whether only matching rows count (inner), or whether the table relates to itself (self). Make sure the correct join type genuinely matters: the answer should change if a different join were used.',
   'UNION / UNION ALL':   'The question must require combining result sets from two separate queries. Make it clear whether duplicates matter (UNION vs UNION ALL).',
   'Subqueries':          'The question must require a query nested inside another. The inner query result must feed the outer query — it cannot be flattened into a single-level query easily.',
   'CASE WHEN':           'The question must require conditional logic that categorizes or transforms values inline. The conditions should be meaningful — not trivially replaceable by a simple WHERE filter.',
@@ -171,14 +194,11 @@ const TOPIC_ANGLES = {
   'SUM':                  ['sum a numeric column across all rows', 'sum a filtered subset of rows', 'sum with GROUP BY to get totals per category'],
   'AVG':                  ['compute the average of a numeric column', 'average a filtered subset', 'round the average to two decimal places'],
   'MIN & MAX':            ['find both the minimum and maximum in one query', 'find the min/max within a filtered subset', 'combine MIN and MAX with GROUP BY'],
+  'Aggregate Functions':  ['count rows with COUNT(*)', 'total a numeric column with SUM', 'average a numeric column with AVG', 'find both MIN and MAX in one query', 'combine several aggregates in a single query', 'aggregate over a filtered subset'],
   // ── Intermediate ──
   'GROUP BY':             ['group by a single column with COUNT(*)', 'group by two columns at once', 'use SUM or AVG instead of COUNT', 'combine with ORDER BY to rank groups'],
   'HAVING':               ['filter groups where an aggregate exceeds a threshold', 'use HAVING with COUNT to find groups with more than N members', 'combine HAVING with a WHERE clause'],
-  'INNER JOIN':           ['join and filter the result with WHERE', 'join and aggregate across both tables', 'join and order by a column from the second table'],
-  'LEFT JOIN':            ['find rows in the left table with no match (NULL check)', 'left join and count matches per left-table row', 'left join with a filter that reveals unmatched rows'],
-  'RIGHT JOIN':           ['find rows in the right table with no match in the left', 'right join and count matches per right-table row'],
-  'FULL OUTER JOIN':      ['find rows with no match on either side', 'combine FULL OUTER JOIN with COALESCE to handle NULLs'],
-  'SELF JOIN':            ['compare rows to each other within the same table', 'find rows that share a value with another row in the same table'],
+  'JOINs':                ['design it so an INNER JOIN is correct — combine matching rows from both tables and filter or aggregate', 'design it so a LEFT JOIN is correct — the answer depends on left-table rows that have no match (NULL check)', 'design it so a RIGHT JOIN is correct — the answer depends on right-table rows that have no match in the left', 'design it so a FULL OUTER JOIN is correct — the answer needs rows with no match on either side', 'design it so a SELF JOIN is correct — relate or compare rows within a single table'],
   'UNION / UNION ALL':    ['combine results from two queries with different filters', 'use UNION ALL then aggregate the combined result'],
   'Subqueries':           ['use a subquery in WHERE with IN', 'use a subquery in the FROM clause as a derived table', 'use a scalar subquery in SELECT'],
   'CASE WHEN':            ['categorize a numeric column into labeled buckets', 'assign a label based on a text column value', 'use CASE WHEN inside an aggregate'],
@@ -308,19 +328,82 @@ function parseOllamaJson(text) {
   return null;
 }
 
-function normalizeRows(rows) {
-  return rows
-    .map((row) => {
-      const n = {};
-      Object.keys(row).sort().forEach((k) => { n[k] = row[k]; });
-      return n;
-    })
-    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+// LeetCode-style result comparison. We grade by running both the reference and
+// the user's query and comparing result sets with three tolerances:
+//   1. Columns are compared by POSITION, not name — aliases are ignored, but
+//      column order and count must match the expected output.
+//   2. Row order is enforced only when the reference solution sorts (see
+//      expectsOrder); otherwise rows are compared as an order-independent multiset.
+//   3. Values are normalized — floats rounded, NULL-safe, numeric strings coerced,
+//      surrounding whitespace trimmed (case preserved).
+
+const FLOAT_DECIMALS = 4; // absorbs IEEE float noise & minor precision diffs; single knob to tune leniency
+
+// Normalize a single scalar cell value for tolerant comparison.
+function normScalar(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? Number(v.toFixed(FLOAT_DECIMALS)) : String(v);
+  if (typeof v === 'string') {
+    const t = v.trim();                                   // trim whitespace, case preserved
+    if (/^-?\d+(\.\d+)?$/.test(t)) return Number(Number(t).toFixed(FLOAT_DECIMALS)); // "1" -> 1, "3.50" -> 3.5
+    return t;
+  }
+  return v; // booleans etc.
 }
 
-function resultSetsEqual(a, b) {
-  if (a.length !== b.length) return false;
-  return JSON.stringify(normalizeRows(a)) === JSON.stringify(normalizeRows(b));
+// Row -> array of normalized values in SELECT column order. Object.values
+// preserves column order, so this ignores column NAMES while honoring column
+// order and count.
+function normRow(row) {
+  return Object.values(row).map(normScalar);
+}
+
+// True only if the SQL's outermost query has an ORDER BY (depth 0). Tracking
+// parenthesis depth naturally excludes ORDER BY inside OVER ( ... ) window
+// clauses and inside subqueries (both at depth > 0).
+function expectsOrder(sql) {
+  if (!sql) return false;
+  let depth = 0;
+  const s = sql.replace(/'(?:[^']|'')*'/g, "''"); // blank out string literals to avoid false hits
+  const re = /\border\s+by\b|\(|\)/gi;
+  let m;
+  while ((m = re.exec(s))) {
+    const tok = m[0];
+    if (tok === '(') depth++;
+    else if (tok === ')') depth = Math.max(0, depth - 1);
+    else if (depth === 0) return true; // an ORDER BY at top level
+  }
+  return false;
+}
+
+function resultSetsEqual(expected, actual, ordered) {
+  if (expected.length !== actual.length) return false;
+  let e = expected.map(normRow);
+  let a = actual.map(normRow);
+  if (!ordered) {                                  // sort rows when order is not required
+    const key = (r) => JSON.stringify(r);
+    e = [...e].sort((x, y) => key(x).localeCompare(key(y)));
+    a = [...a].sort((x, y) => key(x).localeCompare(key(y)));
+  }
+  return JSON.stringify(e) === JSON.stringify(a);
+}
+
+// True when the SQL ends with a plain `LIMIT n` (no OFFSET). These "top N"
+// solutions should still accept an answer that omits the LIMIT clause.
+function hasTrailingLimit(sql) {
+  if (!sql) return false;
+  return /\blimit\s+\d+\s*;?\s*$/i.test(sql.trim()) && !/\boffset\b/i.test(sql);
+}
+
+// Order-sensitive prefix check: the (limited) expected rows equal the first
+// N rows of the user's result. Used when the expected SQL has a LIMIT but the
+// user's correct query left it off, returning the same rows plus extras.
+function rowsPrefixEqual(expected, actual) {
+  if (actual.length < expected.length) return false;
+  for (let i = 0; i < expected.length; i++) {
+    if (JSON.stringify(normRow(expected[i])) !== JSON.stringify(normRow(actual[i]))) return false;
+  }
+  return true;
 }
 
 app.post('/api/generate-problem', async (req, res) => {
@@ -354,54 +437,75 @@ app.post('/api/generate-problem', async (req, res) => {
           return block;
         }).join('\n\n');
 
-        const rules = '- problem: 1–3 sentences. Name specific columns from the schema. Ask for patterns, ranges, or categories across multiple rows. Describe the desired result — not the SQL steps to get there.\n- sql: Must return at least 5 rows. Filter using ranges, patterns, or categories drawn from the sample data (e.g. WHERE price > 400, WHERE name LIKE \'B%\'). Every column mentioned in the problem must appear in the SELECT.';
+        const rules = '- problem: 1–3 sentences. Name specific columns from the schema. Ask for patterns, ranges, or categories across multiple rows. Describe the desired result — not the SQL steps to get there.\n- sql: Must return at least 5 rows. Filter using ranges, patterns, or categories drawn from the sample data (e.g. WHERE price > 400, WHERE name LIKE \'B%\'). Every column mentioned in the problem must appear in the SELECT.\n- Keep the sql as SIMPLE and direct as possible: write the shortest query that fully answers the problem. Use only the clauses the topic requires. Do NOT add subqueries, CTEs, joins, window functions, extra conditions, or other constructs unless the problem genuinely needs them. Prefer the most straightforward, idiomatic solution a beginner would write.';
 
         let varietyBlock = '';
         if (recentProblems.length > 0) {
           varietyBlock += `\n\nYou have already given me these problems for this topic — do NOT repeat the same patterns, column combinations, or question structure:\n` +
             recentProblems.map((p, i) => `${i + 1}. "${p}"`).join('\n');
         }
-        const angle = pickAngle(topic);
-        if (angle) varietyBlock += `\n\nAngle to take for this problem: ${angle}`;
 
         const topicContext = TOPIC_CONTEXT[topic] ? `\nContext: ${TOPIC_CONTEXT[topic]}` : '';
-        const prompt = `You are a SQL interview coach. Return ONLY valid JSON: {"problem":"...","sql":"..."}\n\n${schemaBlock}\nTopic: ${topic}${topicContext}\n\n${rules}${varietyBlock}`;
 
         let problemText = `Write a SQL query on ${selectedTables.join(' and ')} practising ${topic}.`;
         let source = 'fallback';
         let problemId = null;
 
-        try {
-          console.log(`Calling Ollama for topic: ${topic}, tables: ${selectedTables.join(', ')}`);
-          const raw = await generateProblemFromOllama(prompt, 'json');
-          console.log('Ollama raw response:', raw.substring(0, 300));
-          const parsed = parseOllamaJson(raw);
+        // Try a few times: the problem is only accepted if its expected SQL
+        // both runs AND returns at least one row. An empty result set means a
+        // problem the user can never see their answer match, so we regenerate.
+        const MAX_ATTEMPTS = 5;
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS && !problemId; attempt++) {
+          // Fresh angle each attempt for variety across retries.
+          const angle = pickAngle(topic);
+          const angleBlock = angle ? `\n\nAngle to take for this problem: ${angle}` : '';
+          const prompt = `You are a SQL interview coach. Return ONLY valid JSON: {"problem":"...","sql":"..."}\n\n${schemaBlock}\nTopic: ${topic}${topicContext}\n\n${rules}${varietyBlock}${angleBlock}`;
 
-          if (parsed) {
-            problemText = parsed.problem;
-            source = 'ollama';
-            // Run expected SQL and store result set
-            try {
-              const expectedRows = await queryRows(database, parsed.sql);
-              problemId = randomUUID();
-              pendingProblems.set(problemId, { db, expectedRows, sql: parsed.sql, topic, schemaBlock, problemText: parsed.problem });
-              saveRecentProblem(topic, parsed.problem);
-              console.log(`Stored expected answer for problemId ${problemId} (${expectedRows.length} rows)`);
-            } catch (sqlErr) {
-              console.warn('Expected SQL failed to execute:', sqlErr.message);
-            }
-          } else {
-            console.warn('Could not parse Ollama response as JSON — no answer checking for this problem');
+          let raw;
+          try {
+            console.log(`Calling Ollama for topic: ${topic}, tables: ${selectedTables.join(', ')} (attempt ${attempt}/${MAX_ATTEMPTS})`);
+            raw = await generateProblemFromOllama(prompt, 'json');
+            console.log('Ollama raw response:', raw.substring(0, 300));
+          } catch (apiError) {
+            // Retry on a failed request too — a transient blip shouldn't drop us
+            // to the answerless fallback when the next attempt would succeed.
+            console.warn(`Attempt ${attempt}: Ollama request failed, retrying:`, apiError.message);
+            continue;
+          }
+
+          const parsed = parseOllamaJson(raw);
+          if (!parsed) {
+            console.warn(`Attempt ${attempt}: could not parse Ollama response as JSON — retrying`);
+            // Remember the last raw text in case every attempt fails to parse.
             problemText = raw;
             source = 'ollama';
+            continue;
           }
-          console.log('Ollama responded successfully');
-        } catch (apiError) {
-          console.warn('Ollama request failed, using fallback:', apiError.message);
+
+          let expectedRows;
+          try {
+            expectedRows = await queryRows(database, parsed.sql);
+          } catch (sqlErr) {
+            console.warn(`Attempt ${attempt}: expected SQL failed to execute, retrying:`, sqlErr.message);
+            continue;
+          }
+
+          if (expectedRows.length === 0) {
+            console.warn(`Attempt ${attempt}: expected SQL returned 0 rows, retrying`);
+            continue;
+          }
+
+          // Accepted: parses, runs, and returns at least one row.
+          problemText = parsed.problem;
+          source = 'ollama';
+          problemId = randomUUID();
+          pendingProblems.set(problemId, { db, expectedRows, sql: parsed.sql, topic, schemaBlock, problemText: parsed.problem });
+          saveRecentProblem(topic, parsed.problem);
+          console.log(`Stored expected answer for problemId ${problemId} (${expectedRows.length} rows)`);
         }
 
         database.close();
-        res.json({ problem: problemText, source, tables: selectedTables, problemId });
+        res.json({ problem: problemText, source, tables: selectedTables, problemId, model: process.env.OLLAMA_MODEL || 'gemma3:27b' });
       } catch (schemaErr) {
         database.close();
         res.status(500).json({ error: schemaErr.message });
@@ -429,7 +533,12 @@ app.post('/api/check-answer', (req, res) => {
   database.all(query, (err, actualRows) => {
     database.close();
     if (err) return res.status(400).json({ error: err.message });
-    const correct = resultSetsEqual(pending.expectedRows, actualRows);
+    const ordered = expectsOrder(pending.sql);
+    let correct = resultSetsEqual(pending.expectedRows, actualRows, ordered);
+    // Accept "top N" answers that leave off the expected solution's LIMIT.
+    if (!correct && hasTrailingLimit(pending.sql)) {
+      correct = rowsPrefixEqual(pending.expectedRows, actualRows);
+    }
     res.json({ correct, actual: actualRows, expected: pending.expectedRows });
   });
 });
@@ -503,15 +612,36 @@ app.get('*', (req, res) => {
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`Server listening on http://localhost:${PORT}`);
+    warmUpOllama();
   });
 }
 
+// Preload the model into VRAM on startup so the first problem isn't slow.
+async function warmUpOllama() {
+  const model = process.env.OLLAMA_MODEL || 'gemma3:27b';
+  const host = process.env.OLLAMA_BASE_URL || 'http://localhost:11500';
+  try {
+    await fetch(`${host}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, prompt: '', keep_alive: process.env.OLLAMA_KEEP_ALIVE || '30m' }),
+    });
+    console.log(`Warmed up Ollama model: ${model}`);
+  } catch (err) {
+    console.log(`Ollama warm-up skipped: ${err.message}`);
+  }
+}
+
 module.exports = app;
+module.exports.resultSetsEqual = resultSetsEqual;
+module.exports.rowsPrefixEqual = rowsPrefixEqual;
+module.exports.expectsOrder = expectsOrder;
+module.exports.normScalar = normScalar;
 
 async function generateProblemFromOllama(prompt, format = null) {
   const model = process.env.OLLAMA_MODEL || 'gemma3:27b';
   const host = process.env.OLLAMA_BASE_URL || 'http://localhost:11500';
-  const body = { model, prompt, stream: false };
+  const body = { model, prompt, stream: false, keep_alive: process.env.OLLAMA_KEEP_ALIVE || '30m' };
   if (format) body.format = format;
   const response = await fetch(`${host}/api/generate`, {
     method: 'POST',

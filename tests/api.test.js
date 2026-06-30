@@ -134,7 +134,7 @@ describe('POST /api/generate-problem', () => {
   test('picks 2 tables for JOIN topics', async () => {
     const res = await request(app)
       .post('/api/generate-problem')
-      .send({ db: 'test.db', topic: 'INNER JOIN' });
+      .send({ db: 'test.db', topic: 'JOINs' });
     expect(res.status).toBe(200);
     expect(res.body.tables).toHaveLength(2);
   });
