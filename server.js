@@ -305,6 +305,42 @@ function queryRows(database, sql) {
   });
 }
 
+// Read a result set preserving ALL output columns positionally, including
+// DUPLICATE column names. node-sqlite3 returns rows as plain objects, so two
+// output columns with the same name (common in JOINs, e.g. villagers.name and
+// fish.name) collapse to a single key and one value is lost — which made a
+// correct answer fail unless the user added AS aliases. Materializing the query
+// into a TEMP TABLE forces SQLite to uniquify duplicate names (name, "name:1", …)
+// while preserving column order and row order, so Object.values() sees every
+// column. The temp table is connection-scoped and dropped immediately.
+function queryRowsPositional(database, sql) {
+  const clean = String(sql).trim().replace(/;\s*$/, '');
+  return new Promise((resolve, reject) => {
+    database.serialize(() => {
+      database.run('DROP TABLE IF EXISTS _cmp_result', (e1) => {
+        if (e1) return reject(e1);
+        database.run(`CREATE TEMP TABLE _cmp_result AS ${clean}`, (e2) => {
+          if (e2) return reject(e2);
+          database.all('SELECT * FROM _cmp_result', (e3, rows) => {
+            if (e3) return reject(e3);
+            database.run('DROP TABLE IF EXISTS _cmp_result', () => resolve(rows));
+          });
+        });
+      });
+    });
+  });
+}
+
+// Positional read that degrades to the plain (name-collapsing) rows if the
+// TEMP TABLE materialization can't run — never worse than the old behavior.
+async function queryRowsPositionalSafe(database, sql, fallbackRows) {
+  try {
+    return await queryRowsPositional(database, sql);
+  } catch {
+    return fallbackRows !== undefined ? fallbackRows : queryRows(database, sql);
+  }
+}
+
 function pickRandom(arr, n) {
   const shuffled = [...arr].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, n);
@@ -495,11 +531,15 @@ app.post('/api/generate-problem', async (req, res) => {
             continue;
           }
 
+          // Positional copy for answer comparison (duplicate columns preserved);
+          // expectedRows stays as-is for display.
+          const expectedCmp = await queryRowsPositionalSafe(database, parsed.sql, expectedRows);
+
           // Accepted: parses, runs, and returns at least one row.
           problemText = parsed.problem;
           source = 'ollama';
           problemId = randomUUID();
-          pendingProblems.set(problemId, { db, expectedRows, sql: parsed.sql, topic, schemaBlock, problemText: parsed.problem });
+          pendingProblems.set(problemId, { db, expectedRows, expectedCmp, sql: parsed.sql, topic, schemaBlock, problemText: parsed.problem });
           saveRecentProblem(topic, parsed.problem);
           console.log(`Stored expected answer for problemId ${problemId} (${expectedRows.length} rows)`);
         }
@@ -530,16 +570,25 @@ app.post('/api/check-answer', (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 
-  database.all(query, (err, actualRows) => {
-    database.close();
-    if (err) return res.status(400).json({ error: err.message });
-    const ordered = expectsOrder(pending.sql);
-    let correct = resultSetsEqual(pending.expectedRows, actualRows, ordered);
-    // Accept "top N" answers that leave off the expected solution's LIMIT.
-    if (!correct && hasTrailingLimit(pending.sql)) {
-      correct = rowsPrefixEqual(pending.expectedRows, actualRows);
+  database.all(query, async (err, actualRows) => {
+    if (err) { database.close(); return res.status(400).json({ error: err.message }); }
+    try {
+      // Compare on positional reads (duplicate columns preserved) so a correct
+      // answer isn't rejected for lacking AS aliases; actualRows is for display.
+      const actualCmp = await queryRowsPositionalSafe(database, query, actualRows);
+      const expectedCmp = pending.expectedCmp || pending.expectedRows;
+      const ordered = expectsOrder(pending.sql);
+      let correct = resultSetsEqual(expectedCmp, actualCmp, ordered);
+      // Accept "top N" answers that leave off the expected solution's LIMIT.
+      if (!correct && hasTrailingLimit(pending.sql)) {
+        correct = rowsPrefixEqual(expectedCmp, actualCmp);
+      }
+      res.json({ correct, actual: actualRows, expected: pending.expectedRows });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    } finally {
+      database.close();
     }
-    res.json({ correct, actual: actualRows, expected: pending.expectedRows });
   });
 });
 
@@ -637,6 +686,7 @@ module.exports.resultSetsEqual = resultSetsEqual;
 module.exports.rowsPrefixEqual = rowsPrefixEqual;
 module.exports.expectsOrder = expectsOrder;
 module.exports.normScalar = normScalar;
+module.exports.queryRowsPositional = queryRowsPositional;
 
 async function generateProblemFromOllama(prompt, format = null) {
   const model = process.env.OLLAMA_MODEL || 'gemma3:27b';
