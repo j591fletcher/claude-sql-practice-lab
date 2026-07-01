@@ -1,44 +1,47 @@
 :root {
   /* ── Warm Motivator palette ── */
-  --bg: #faf4ea;          /* app background — warm cream */
-  --card: #fffdf9;        /* raised cards / panels */
-  --sunken: #f1e8d8;      /* recessed wells (segmented control, code) */
-  --line: #ece0cd;        /* hairline borders */
-  --line-strong: #e0d0b6;
+  /* Dark theme — cohesive with the Tokyo Night editor pane.
+     Backgrounds step from deep (app) → card → sunken; ink is a warm off-white.
+     Accent -ink / -strong tokens are LIGHT so they read as text on dark tints. */
+  --bg: #161a22;          /* app background — deep slate */
+  --card: #1f242e;        /* raised cards / panels — matches editor bg */
+  --sunken: #12151c;      /* recessed wells (segmented control, tracks) */
+  --line: #2b313d;        /* hairline borders */
+  --line-strong: #3b4453;
 
-  --ink: #2c2620;         /* primary text — warm charcoal */
-  --ink-soft: #5f5749;    /* muted text — AA on cream (6.6:1) */
-  --ink-faint: #756b59;   /* faintest text — AA on cream (4.7:1) */
+  --ink: #e6e1d6;         /* primary text — warm off-white (matches editor) */
+  --ink-soft: #a9b1c0;    /* muted text — AA on card */
+  --ink-faint: #7c8697;   /* faintest text — AA on card */
 
   --brand: #f2792b;       /* warm orange — hero fills / borders */
-  --brand-strong: #d65d14; /* deeper orange — fills, focus ring */
-  --brand-ink: #a8440b;   /* AA small text on cream/sunken/white (4.9–5.9:1) */
-  --brand-soft: #fdecd9;
+  --brand-strong: #ff9247; /* brighter orange — hover, focus ring */
+  --brand-ink: #ffb178;   /* light warm orange — accent text on dark */
+  --brand-soft: rgba(242, 121, 43, 0.16);
 
-  --teal: #12b3a4;        /* secondary / check / run */
-  --teal-strong: #097065; /* AA text on teal-soft (5.1:1); also fill base */
-  --teal-soft: #d6f3ef;
+  --teal: #22b6a6;        /* secondary / check / run — fill base */
+  --teal-strong: #6fe0d1; /* light teal — accent text on dark */
+  --teal-soft: rgba(86, 211, 195, 0.15);
 
   --amber: #f5b740;       /* hints / warmth */
-  --amber-soft: #fdf0d4;
-  --amber-ink: #856518;   /* AA text on amber-soft (4.8:1) */
+  --amber-soft: rgba(245, 183, 64, 0.15);
+  --amber-ink: #f2c874;   /* light amber — accent text on dark */
 
   --coral: #f4965a;       /* warm peach — harmonizes with brand */
-  --red: #d64a38;         /* incorrect — AA-safe warm red */
-  --red-soft: #fbe4df;
-  --red-ink: #b03a29;     /* AA text on red-soft */
+  --red: #f7768e;         /* incorrect — matches editor error */
+  --red-soft: rgba(247, 118, 142, 0.15);
+  --red-ink: #ff9db0;     /* light red — accent text on dark */
 
-  --bronze: #c0894f;
-  --silver: #aab2bd;
-  --gold: #f3b53b;
+  --bronze: #dd8a45;      /* richer copper — reads clearly on dark */
+  --silver: #cfd9ea;      /* brighter cool silver */
+  --gold: #f6bd3c;
 
   --radius-sm: 9px;
   --radius: 13px;
   --radius-lg: 18px;
 
-  --shadow-sm: 0 1px 2px rgba(90, 64, 30, 0.06);
-  --shadow: 0 6px 20px rgba(110, 80, 40, 0.08), 0 1px 3px rgba(110, 80, 40, 0.06);
-  --shadow-lg: 0 24px 60px rgba(70, 50, 25, 0.22);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.42), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 28px 64px rgba(0, 0, 0, 0.6);
 
   --sidebar-width: 384px;
   --font: 'Nunito', system-ui, -apple-system, sans-serif;
@@ -66,7 +69,7 @@ button:focus-visible,
 .topic-pill:focus-visible,
 .diff-tab:focus-visible,
 .table-chip-btn:focus-visible,
-.mm-tile:focus-visible {
+.mm-cell:focus-visible {
   outline: 2px solid var(--brand-strong);
   outline-offset: 2px;
 }
@@ -398,7 +401,7 @@ button:focus-visible,
 .hint-section { gap: 8px; }
 .hint-text {
   background: var(--amber-soft);
-  border: 1px solid #f1dca5;
+  border: 1px solid rgba(245, 183, 64, 0.32);
   border-radius: var(--radius-sm);
   color: var(--amber-ink);
   font-size: 0.86rem;
@@ -559,17 +562,17 @@ button:focus-visible,
   border: 1.5px solid var(--line-strong);
   color: var(--ink-faint);
 }
-.btn-hint:not(:disabled) { border-color: #eccf86; color: var(--amber-ink); background: var(--amber-soft); }
+.btn-hint:not(:disabled) { border-color: rgba(245, 183, 64, 0.4); color: var(--amber-ink); background: var(--amber-soft); }
 .btn-hint:not(:disabled):hover { border-color: var(--amber); transform: translateY(-1px); }
 .btn-hint:disabled { cursor: not-allowed; opacity: 0.6; }
 
 .btn-submit {
-  background: linear-gradient(135deg, var(--teal), var(--teal-strong));
+  background: linear-gradient(135deg, #2bc2b0, #1a9385);
   border: 1.5px solid transparent;
   color: #fff;
-  box-shadow: 0 6px 14px rgba(14, 154, 140, 0.26);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
 }
-.btn-submit:hover { transform: translateY(-1px); box-shadow: 0 9px 18px rgba(14, 154, 140, 0.32); }
+.btn-submit:hover { transform: translateY(-1px); box-shadow: 0 9px 20px rgba(43, 194, 176, 0.3); }
 .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .editor-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
@@ -728,7 +731,7 @@ table td {
   color: var(--ink);
   border-bottom: 1px solid var(--line);
 }
-table tbody tr:nth-child(even) td { background: rgba(242, 121, 43, 0.035); }
+table tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.025); }
 table tbody tr:hover td { background: var(--amber-soft) !important; }
 
 .row-count { margin-top: 10px; font-size: 0.74rem; font-weight: 700; color: var(--ink-faint); font-family: var(--font); }
@@ -747,12 +750,12 @@ table tbody tr:hover td { background: var(--amber-soft) !important; }
 }
 .answer-correct {
   background: var(--teal-soft);
-  border: 1px solid #9fe0d6;
+  border: 1px solid rgba(86, 211, 195, 0.4);
   color: var(--teal-strong);
 }
 .answer-incorrect {
   background: var(--red-soft);
-  border: 1px solid #f1bcb2;
+  border: 1px solid rgba(247, 118, 142, 0.4);
   color: var(--red-ink);
 }
 
@@ -771,7 +774,7 @@ table tbody tr:hover td { background: var(--amber-soft) !important; }
 .mm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(50, 36, 20, 0.42);
+  background: rgba(0, 0, 0, 0.62);
   backdrop-filter: blur(3px);
   display: none;
   align-items: center;
@@ -838,9 +841,9 @@ table tbody tr:hover td { background: var(--amber-soft) !important; }
 .mm-leg-muted { margin-left: auto; font-style: italic; color: var(--ink-faint); }
 
 .mm-columns {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
   padding: 22px 24px;
   overflow-y: auto;
 }
@@ -858,41 +861,96 @@ table tbody tr:hover td { background: var(--amber-soft) !important; }
 }
 .mm-col-count { color: var(--amber-ink); }
 
-.mm-tiles { display: flex; flex-direction: column; gap: 8px; }
-
-.mm-tile {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 11px 13px;
-  cursor: pointer;
-  transition: border-color 0.12s ease, transform 0.08s ease, box-shadow 0.15s ease;
-  box-shadow: var(--shadow-sm);
+/* ── Heatmap grid ──
+   Each topic is a cell whose STRONG discrete tier hue reads at any count, with
+   a small --heat lift for life. A within-tier bar + explicit numbers show how
+   many solves are banked and how many remain to the next level. */
+.mm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px;
 }
-.mm-tile:hover { transform: translateY(-2px); border-color: var(--line-strong); box-shadow: var(--shadow); }
-.mm-tile-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.mm-name { font-size: 0.84rem; font-weight: 800; color: var(--ink); }
-.mm-tile.mm-none { background: var(--bg); }
-.mm-tile.mm-none .mm-name { color: var(--ink-faint); }
-.mm-sub { font-size: 0.68rem; color: var(--ink-faint); margin-top: 5px; font-weight: 700; }
+.mm-cell {
+  --tier: var(--line-strong);
+  --heat: 0;
+  min-height: 82px;
+  border-radius: 11px;
+  padding: 9px 11px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  background: var(--card); /* fallback where color-mix is unsupported */
+  background: color-mix(in srgb, var(--tier) calc(30% + var(--heat) * 20%), var(--card));
+  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--tier) 70%, transparent);
+  transition: transform 0.08s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.mm-cell:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
 
-.mm-pips { display: inline-flex; gap: 4px; flex-shrink: 0; }
-.mm-pip {
-  width: 9px; height: 9px;
-  border-radius: 50%;
+.mm-cell-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+.mm-cell-name {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mm-cell-tag {
+  flex-shrink: 0;
+  font-size: 0.56rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  background: color-mix(in srgb, var(--tier) 26%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--tier) 55%, transparent);
+  white-space: nowrap;
+}
+
+/* Progress toward the NEXT tier */
+.mm-cell-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--sunken);
+  border: 1px solid color-mix(in srgb, var(--tier) 30%, transparent);
+  overflow: hidden;
+}
+.mm-cell-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tier);
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.mm-cell-meta { font-size: 0.66rem; font-weight: 700; color: var(--ink-faint); line-height: 1.2; }
+.mm-cell-meta b { color: var(--ink); font-weight: 900; }
+
+.mm-cell.mm-none   { --tier: var(--line-strong); }
+.mm-cell.mm-none .mm-cell-tag { color: var(--ink-faint); }
+.mm-cell.mm-bronze { --tier: var(--bronze); }
+.mm-cell.mm-bronze .mm-cell-tag { color: #f0c199; }
+.mm-cell.mm-silver { --tier: var(--silver); }
+.mm-cell.mm-silver .mm-cell-tag { color: #e3ebf6; }
+.mm-cell.mm-gold {
+  --tier: var(--gold);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 45%, transparent), 0 0 16px rgba(246, 189, 60, 0.24);
+}
+.mm-cell.mm-gold .mm-cell-tag { color: #ffdd80; }
+.mm-cell.mm-gold .mm-cell-fill { box-shadow: 0 0 9px rgba(246, 189, 60, 0.6); }
+.mm-cell.mm-gold .mm-cell-meta,
+.mm-cell.mm-gold .mm-cell-meta b { color: var(--amber-ink); }
+
+/* Legend swatches (square, matching the strong tier colors) */
+.mm-leg-sw {
+  width: 12px; height: 12px;
+  border-radius: 4px;
   border: 1px solid var(--line-strong);
-  background: transparent;
   display: inline-block;
 }
-.mm-pip.bronze.on { background: var(--bronze); border-color: var(--bronze); box-shadow: 0 0 5px rgba(192, 137, 79, 0.55); }
-.mm-pip.silver.on { background: var(--silver); border-color: var(--silver); box-shadow: 0 0 5px rgba(170, 178, 189, 0.55); }
-.mm-pip.gold.on   { background: var(--gold);   border-color: var(--gold);   box-shadow: 0 0 6px rgba(243, 181, 59, 0.7); }
-
-.mm-tile.mm-bronze { border-color: rgba(192, 137, 79, 0.5); }
-.mm-tile.mm-silver { border-color: rgba(170, 178, 189, 0.6); }
-.mm-tile.mm-gold {
-  border-color: rgba(243, 181, 59, 0.65);
-  background: linear-gradient(135deg, rgba(243, 181, 59, 0.12), var(--card));
-  box-shadow: 0 0 0 1px rgba(243, 181, 59, 0.18), 0 6px 16px rgba(243, 181, 59, 0.14);
-}
-.mm-tile.mm-gold .mm-sub { color: var(--amber-ink); }
+.mm-leg-sw.bronze { background: color-mix(in srgb, var(--bronze) 62%, var(--card)); border-color: var(--bronze); }
+.mm-leg-sw.silver { background: color-mix(in srgb, var(--silver) 62%, var(--card)); border-color: var(--silver); }
+.mm-leg-sw.gold   { background: color-mix(in srgb, var(--gold) 62%, var(--card)); border-color: var(--gold); }

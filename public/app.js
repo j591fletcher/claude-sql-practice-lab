@@ -140,11 +140,13 @@ function renderMasteryMap() {
   columns.innerHTML = '';
   let goldTotal = 0, solveTotal = 0, topicTotal = 0;
 
+  const TIER_LABEL = { none: 'Locked', bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
+
   DIFF_ORDER.forEach((diff) => {
     const col = document.createElement('div');
     col.className = 'mm-col';
-    const tiles = document.createElement('div');
-    tiles.className = 'mm-tiles';
+    const grid = document.createElement('div');
+    grid.className = 'mm-grid';
 
     let colGold = 0;
     TOPICS[diff].forEach((topic) => {
@@ -154,38 +156,47 @@ function renderMasteryMap() {
       const info = tierFor(topic, count);
       if (info.tier === 'gold') { colGold++; goldTotal++; }
 
-      const pip = (cls, on) => `<i class="mm-pip ${cls}${on ? ' on' : ''}"></i>`;
-      const pips = pip('bronze', info.reached >= 1) + pip('silver', info.reached >= 2) + pip('gold', info.reached >= 3);
+      const th = TIER_THRESHOLDS[diff];
+      const heat = Math.min(count / th.gold, 1); // subtle background lift within a tier
 
-      let sub;
-      if (info.tier === 'gold') sub = `★ Mastered · ${count} solves`;
-      else if (count === 0)     sub = `Not started · ${info.toNext} to Bronze`;
-      else                      sub = `${count} solve${count !== 1 ? 's' : ''} · ${info.toNext} to ${info.nextName}`;
+      // Progress within the current tier band → the next level (what the user acts on).
+      let lo = 0, hi = th.bronze;
+      if (info.tier === 'bronze') { lo = th.bronze; hi = th.silver; }
+      else if (info.tier === 'silver') { lo = th.silver; hi = th.gold; }
+      const bandPct = info.tier === 'gold' ? 100 : Math.round(((count - lo) / (hi - lo)) * 100);
 
-      const tile = document.createElement('div');
-      tile.className = `mm-tile mm-${info.tier}`;
-      tile.setAttribute('role', 'button');
-      tile.setAttribute('tabindex', '0');
-      const tierWord = info.tier === 'none' ? 'not started' : `${info.tier} tier`;
-      tile.setAttribute('aria-label', `${topic}, ${tierWord}. ${sub.replace('★', '').trim()}. Practice this topic.`);
-      tile.innerHTML = `
-        <div class="mm-tile-top">
-          <span class="mm-name">${topic}</span>
-          <span class="mm-pips" aria-hidden="true">${pips}</span>
+      const solves = `${count} solve${count !== 1 ? 's' : ''}`;
+      const metaText = info.tier === 'gold'
+        ? `★ Mastered · ${solves}`
+        : `${solves} · <b>${info.toNext} to ${info.nextName}</b>`;
+      const plainMeta = info.tier === 'gold' ? `Mastered · ${solves}` : `${solves}, ${info.toNext} to ${info.nextName}`;
+
+      const cell = document.createElement('div');
+      cell.className = `mm-cell mm-${info.tier}`;
+      cell.style.setProperty('--heat', heat.toFixed(3));
+      cell.setAttribute('role', 'button');
+      cell.setAttribute('tabindex', '0');
+      cell.setAttribute('title', `${topic} — ${plainMeta}`);
+      cell.setAttribute('aria-label', `${topic}, ${TIER_LABEL[info.tier]}. ${plainMeta}. Practice this topic.`);
+      cell.innerHTML = `
+        <div class="mm-cell-head">
+          <span class="mm-cell-name">${topic}</span>
+          <span class="mm-cell-tag">${TIER_LABEL[info.tier]}</span>
         </div>
-        <div class="mm-sub">${sub}</div>`;
-      tile.addEventListener('click', () => selectTopicFromMap(diff, topic));
-      tile.addEventListener('keydown', (e) => {
+        <div class="mm-cell-track" aria-hidden="true"><div class="mm-cell-fill" style="width:${bandPct}%"></div></div>
+        <div class="mm-cell-meta">${metaText}</div>`;
+      cell.addEventListener('click', () => selectTopicFromMap(diff, topic));
+      cell.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectTopicFromMap(diff, topic); }
       });
-      tiles.appendChild(tile);
+      grid.appendChild(cell);
     });
 
     const head = document.createElement('div');
     head.className = 'mm-col-head';
     head.innerHTML = `<span>${DIFF_LABEL[diff]}</span><span class="mm-col-count">${colGold}/${TOPICS[diff].length} ★</span>`;
     col.appendChild(head);
-    col.appendChild(tiles);
+    col.appendChild(grid);
     columns.appendChild(col);
   });
 
