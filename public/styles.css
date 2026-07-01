@@ -574,7 +574,9 @@ button:focus-visible,
 
 .editor-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 
-/* ── CodeMirror — light, warm ── */
+/* ── CodeMirror — dark editor pane ──
+   A warm-tinted slate theme so the code area reads as a real editor while the
+   rest of the app stays light. Token colors are vivid and distinct. */
 .editor-pane .CodeMirror {
   position: absolute;
   inset: 0;
@@ -582,32 +584,76 @@ button:focus-visible,
   font-family: var(--mono);
   font-size: 0.95rem;
   line-height: 1.75;
-  background: #fffdf9;
-  color: var(--ink);
+  background: #1f242e;
+  color: #e4e0d6;
 }
-.editor-pane .CodeMirror-gutters { background: #fbf5ea; border-right: 1px solid var(--line); }
-.editor-pane .CodeMirror-linenumber { color: #c4b495; }
+.editor-pane .CodeMirror-gutters { background: #1a1e27; border-right: 1px solid #2b313d; }
+.editor-pane .CodeMirror-linenumber { color: #5b6474; }
 .editor-pane .CodeMirror-cursor { border-left: 2px solid var(--brand); }
-.editor-pane .CodeMirror-selected { background: rgba(242, 121, 43, 0.16) !important; }
-.editor-pane .CodeMirror-focused .CodeMirror-selected { background: rgba(242, 121, 43, 0.2) !important; }
-.editor-pane .CodeMirror-activeline-background { background: rgba(245, 183, 64, 0.09); }
+.editor-pane .CodeMirror-selected { background: rgba(122, 162, 247, 0.20) !important; }
+.editor-pane .CodeMirror-focused .CodeMirror-selected { background: rgba(122, 162, 247, 0.28) !important; }
+.editor-pane .CodeMirror-activeline-background { background: rgba(255, 255, 255, 0.035); }
+.editor-pane .CodeMirror-matchingbracket { color: #9ece6a !important; border-bottom: 1px solid #9ece6a; font-weight: 700; }
 
-.editor-pane .cm-keyword  { color: var(--brand-ink); font-weight: 700; }
-.editor-pane .cm-builtin  { color: var(--teal-strong); }
-.editor-pane .cm-def      { color: var(--teal-strong); }
-.editor-pane .cm-type     { color: var(--teal-strong); }
-.editor-pane .cm-string   { color: #2f9e63; }
-.editor-pane .cm-string-2 { color: #2f9e63; }
-.editor-pane .cm-number   { color: #8a5cd6; }
-.editor-pane .cm-atom     { color: #8a5cd6; }
-.editor-pane .cm-operator { color: #c2410c; }
-.editor-pane .cm-variable  { color: var(--ink); }
-.editor-pane .cm-variable-2 { color: #5a7a5a; }
-.editor-pane .cm-comment  { color: #b3a288; font-style: italic; }
+.editor-pane .cm-keyword    { color: #7aa2f7; font-weight: 700; }  /* SELECT, FROM, WHERE… */
+.editor-pane .cm-builtin    { color: #56d3c3; }                    /* functions */
+.editor-pane .cm-def        { color: #56d3c3; }
+.editor-pane .cm-type       { color: #56d3c3; }
+.editor-pane .cm-string     { color: #9ece6a; }                    /* 'text' */
+.editor-pane .cm-string-2   { color: #9ece6a; }
+.editor-pane .cm-number     { color: #e0a45e; }                    /* 123, 4.5 */
+.editor-pane .cm-atom       { color: #e0a45e; }                    /* TRUE, NULL */
+.editor-pane .cm-operator   { color: #89ddff; }                    /* = < > + */
+.editor-pane .cm-punctuation { color: #a7b0c0; }
+.editor-pane .cm-bracket    { color: #a7b0c0; }
+.editor-pane .cm-variable   { color: #e4e0d6; }
+.editor-pane .cm-variable-2 { color: #7dcfff; }                    /* aliases / table refs */
+.editor-pane .cm-comment    { color: #6b7488; font-style: italic; }
+
+/* Live lint: wavy underline under structural errors + gutter marker */
+.editor-pane .CodeMirror-lint-mark-error {
+  background: none;
+  text-decoration: underline wavy #f7768e;
+  text-decoration-skip-ink: none;
+}
+.CodeMirror-lint-tooltip {
+  background: #2a3040;
+  color: #e4e0d6;
+  border: 1px solid #3a4152;
+  border-radius: var(--radius-sm);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  padding: 5px 9px;
+}
+
+/* Token that SQLite named in a Run/Test error */
+.editor-pane .cm-sql-error {
+  background: rgba(247, 118, 142, 0.18);
+  text-decoration: underline wavy #f7768e;
+  text-decoration-skip-ink: none;
+  border-radius: 2px;
+}
 
 .editor-pane .CodeMirror-lines { padding: 14px 0; }
 .editor-pane .CodeMirror pre.CodeMirror-line,
 .editor-pane .CodeMirror pre.CodeMirror-line-like { padding: 0 18px; }
+
+/* SQLite error shown in the results pane */
+.sql-error-box {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  background: var(--red-soft);
+  color: var(--red-ink);
+  border: 1px solid rgba(214, 74, 56, 0.28);
+  border-radius: var(--radius-sm);
+  padding: 11px 13px;
+  font-family: var(--mono);
+  font-size: 0.84rem;
+  line-height: 1.55;
+  word-break: break-word;
+}
+.sql-error-icon { flex: none; font-size: 0.95rem; line-height: 1.4; }
 
 /* Autocomplete dropdown */
 .CodeMirror-hints {

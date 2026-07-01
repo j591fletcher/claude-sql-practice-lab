@@ -412,7 +412,8 @@ async function validateSql() {
       body: JSON.stringify({ db: activeDatabase, query }),
     });
     const payload = await response.json();
-    if (!response.ok) { resultArea.textContent = `Error: ${payload.error}`; return; }
+    if (!response.ok) { highlightServerError(payload.error); renderSqlError(resultArea, payload.error); return; }
+    clearSqlErrorMarks();
     renderResult(payload.rows);
   } finally {
     btn.disabled = false;
@@ -473,7 +474,8 @@ async function submitAnswer() {
       body: JSON.stringify({ db: activeDatabase, query }),
     });
     const payload = await res.json();
-    if (!res.ok) { resultArea.textContent = `Error: ${payload.error}`; return; }
+    if (!res.ok) { highlightServerError(payload.error); renderSqlError(resultArea, payload.error); return; }
+    clearSqlErrorMarks();
     appendResultTable(payload.rows, resultArea);
     return;
   }
@@ -491,12 +493,11 @@ async function submitAnswer() {
     const payload = await res.json();
 
     if (!res.ok) {
-      const err = document.createElement('div');
-      err.className = 'result-section-label';
-      err.textContent = `Error: ${payload.error}`;
-      resultArea.appendChild(err);
+      highlightServerError(payload.error);
+      renderSqlError(resultArea, payload.error);
       return;
     }
+    clearSqlErrorMarks();
 
     const banner = document.createElement('div');
     banner.className = 'answer-banner ' + (payload.correct ? 'answer-correct' : 'answer-incorrect');
@@ -647,11 +648,106 @@ document.getElementById('schemaCloseBtn').addEventListener('click', closeSchema)
 document.getElementById('hintBtn').addEventListener('click', showHint);
 document.getElementById('revealSolutionBtn').addEventListener('click', revealSolution);
 
+// ── Live syntax linting ──
+// A lightweight structural check that runs as you type. It won't catch every
+// SQL mistake (that's what Run + SQLite does), but it flags the errors that are
+// unambiguous from the text alone: unbalanced parentheses and unterminated
+// string / comment literals. Returns CodeMirror lint annotations.
+function sqlLint(text) {
+  const errors = [];
+  const parenStack = [];
+  let i = 0, line = 0, ch = 0;
+  const n = text.length;
+  const pos = () => CodeMirror.Pos(line, ch);
+  const advance = () => { if (text[i] === '\n') { line++; ch = 0; } else { ch++; } i++; };
+
+  while (i < n) {
+    const c = text[i];
+    // Line comment: -- to end of line
+    if (c === '-' && text[i + 1] === '-') { while (i < n && text[i] !== '\n') advance(); continue; }
+    // Block comment: /* ... */
+    if (c === '/' && text[i + 1] === '*') {
+      const from = pos(); advance(); advance();
+      let closed = false;
+      while (i < n) { if (text[i] === '*' && text[i + 1] === '/') { advance(); advance(); closed = true; break; } advance(); }
+      if (!closed) errors.push({ from, to: pos(), message: 'Unterminated block comment', severity: 'error' });
+      continue;
+    }
+    // String literal: '...' with '' as an escaped quote
+    if (c === "'") {
+      const from = pos(); advance();
+      let closed = false;
+      while (i < n) {
+        if (text[i] === "'") { if (text[i + 1] === "'") { advance(); advance(); continue; } advance(); closed = true; break; }
+        if (text[i] === '\n') break; // treat a newline as an unterminated string for live feedback
+        advance();
+      }
+      if (!closed) errors.push({ from, to: pos(), message: 'Unterminated string literal', severity: 'error' });
+      continue;
+    }
+    if (c === '(') { parenStack.push(pos()); advance(); continue; }
+    if (c === ')') {
+      if (parenStack.length === 0) errors.push({ from: pos(), to: CodeMirror.Pos(line, ch + 1), message: 'Unmatched closing parenthesis )', severity: 'error' });
+      else parenStack.pop();
+      advance(); continue;
+    }
+    advance();
+  }
+  parenStack.forEach((p) => errors.push({ from: p, to: CodeMirror.Pos(p.line, p.ch + 1), message: 'Unmatched opening parenthesis (', severity: 'error' }));
+  return errors;
+}
+
+// ── Server-reported error highlighting ──
+// When SQLite rejects a query on Run/Test, underline the exact token it named.
+let sqlErrorMarks = [];
+function clearSqlErrorMarks() {
+  sqlErrorMarks.forEach((m) => m.clear());
+  sqlErrorMarks = [];
+}
+function highlightServerError(message) {
+  clearSqlErrorMarks();
+  if (!message || !editor) return;
+  const patterns = [
+    /near "([^"]+)"/i,
+    /no such table:\s*([^\s;,)]+)/i,
+    /no such column:\s*([^\s;,)]+)/i,
+    /no such function:\s*([^\s(;,)]+)/i,
+    /ambiguous column name:\s*([^\s;,)]+)/i,
+  ];
+  let token = null;
+  for (const p of patterns) { const m = message.match(p); if (m && m[1]) { token = m[1]; break; } }
+  if (!token) return;
+  const idx = editor.getValue().indexOf(token);
+  if (idx === -1) return;
+  const from = editor.posFromIndex(idx);
+  const to = editor.posFromIndex(idx + token.length);
+  sqlErrorMarks.push(editor.markText(from, to, { className: 'cm-sql-error', title: message }));
+  editor.scrollIntoView({ from, to }, 40);
+}
+
+// Render a SQLite error as a styled box instead of plain text.
+function renderSqlError(resultArea, message) {
+  resultArea.innerHTML = '';
+  const box = document.createElement('div');
+  box.className = 'sql-error-box';
+  const icon = document.createElement('span');
+  icon.className = 'sql-error-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = '⚠';
+  const txt = document.createElement('span');
+  txt.textContent = message;
+  box.appendChild(icon);
+  box.appendChild(txt);
+  resultArea.appendChild(box);
+}
+
 // ── CodeMirror ──
 editor = CodeMirror.fromTextArea(document.getElementById('sqlInput'), {
   mode: 'text/x-sql',
   theme: 'default',
   lineNumbers: true,
+  gutters: ['CodeMirror-linenumbers', 'CodeMirror-lint-markers'],
+  lint: { getAnnotations: sqlLint },
   tabSize: 2,
   indentWithTabs: false,
   lineWrapping: true,
@@ -671,5 +767,8 @@ editor = CodeMirror.fromTextArea(document.getElementById('sqlInput'), {
     },
   },
 });
+
+// A server error mark is stale as soon as the query text changes.
+editor.on('change', clearSqlErrorMarks);
 
 initialize();
