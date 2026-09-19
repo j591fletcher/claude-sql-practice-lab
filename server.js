@@ -125,7 +125,7 @@ app.get('/api/schema', (req, res) => {
 });
 
 const MULTI_TABLE_TOPICS = new Set([
-  'JOINs', 'UNION / UNION ALL', 'INTERSECT & EXCEPT',
+  'JOINs', 'UNION / UNION ALL', 'INTERSECT & EXCEPT', 'Anti-Joins',
 ]);
 
 const TOPIC_CONTEXT = {
@@ -156,6 +156,11 @@ const TOPIC_CONTEXT = {
   'COALESCE':            'The question must require substituting a fallback value when a column is NULL. The table must actually contain NULLs in the relevant column, making COALESCE necessary.',
   'String Functions':    'The question must require manipulating text using built-in string functions (UPPER, LOWER, LENGTH, SUBSTR, REPLACE, TRIM, etc.). The transformation should produce a meaningfully different output.',
   'CAST':                'The question must require explicitly converting a value from one data type to another. The type mismatch should be meaningful — not a redundant cast on an already-correct type.',
+  'Date & Time Functions': 'The question must require extracting a part of a date/time value or computing a date difference/offset using functions like strftime, date, or datetime. The date logic should be central to the answer — not incidental.',
+  'Self Joins':          'The question must require joining a table to itself using two aliases to compare or relate rows within the same table (e.g. pairing rows, or relating a row to another row it references). It cannot be answered with a plain single-table query.',
+  'Conditional Aggregation': 'The question must require SUM(CASE WHEN ...) or COUNT(CASE WHEN ...) style expressions to turn category values into separate aggregated columns in one row per group. A plain GROUP BY without conditional logic must not be sufficient.',
+  'String Aggregation':  'The question must require rolling up multiple grouped values into a single delimited string using GROUP_CONCAT. The grouping and concatenation should both be meaningful — not just one row per group already.',
+  'Anti-Joins':          'The question must require finding rows in one table that have NO matching row in another, using a LEFT JOIN with a WHERE ... IS NULL check on the right-hand table\'s key. The answer must depend on absence of a match — this cannot be solved with an INNER JOIN.',
   // ── Advanced ──
   'CTEs':                'The question must require a WITH clause to name and reuse an intermediate result set. The CTE must be referenced in the main query — it should not be inlined without losing clarity.',
   'Multiple CTEs':       'The question must require at least two named CTEs in a single WITH clause. Each CTE should serve a distinct purpose, and the main query should reference more than one of them.',
@@ -170,6 +175,8 @@ const TOPIC_CONTEXT = {
   'Correlated Subqueries': 'The question must require a subquery that references a column from the outer query. The inner query must execute once per outer row — it cannot be replaced by a simple join or uncorrelated subquery.',
   'EXISTS / NOT EXISTS': 'The question must require checking for the presence or absence of related rows. The result should depend on whether matching rows exist — not on their values.',
   'INTERSECT & EXCEPT':  'The question must use set operations: INTERSECT to find common rows between two queries, or EXCEPT to find rows in one set but not another.',
+  'Window Frames':       'The question must require an explicit ROWS BETWEEN or RANGE BETWEEN frame clause (e.g. a moving average or moving sum over a small fixed window), not just a default frame or a full-partition running total.',
+  'PERCENT_RANK & CUME_DIST': 'The question must require computing a relative standing of each row within its partition using PERCENT_RANK or CUME_DIST. The result should be interpreted as a percentile or cumulative proportion, not a raw rank.',
   // ── Legacy keys (kept for backward compatibility with any stored progress) ──
   'SUBQUERY':            'The question must require a query nested inside another. The inner query result must feed the outer query — it cannot be flattened into a single-level query easily.',
   'AGGREGATE FUNCTIONS': 'The question must use one or more aggregate functions (COUNT, SUM, AVG, MIN, MAX) to compute a summary from multiple rows.',
@@ -205,6 +212,11 @@ const TOPIC_ANGLES = {
   'COALESCE':             ['replace NULLs in a column with a default string', 'use COALESCE to combine two columns where one may be NULL', 'use COALESCE inside an aggregate'],
   'String Functions':     ['use UPPER or LOWER to normalize text', 'use LENGTH to filter by string length', 'use SUBSTR or REPLACE to transform a value'],
   'CAST':                 ['cast a text column to INTEGER for arithmetic', 'cast a numeric column to TEXT for concatenation', 'cast inside an aggregate expression'],
+  'Date & Time Functions': ['extract the year or month from a date column with strftime', 'filter rows within a date range', 'compute the number of days between two dates', 'find rows from the most recent N days relative to the latest date in the table'],
+  'Self Joins':           ['pair rows in the same table that share a value (e.g. same category, different row)', 'relate a row to another row it references via a self-referencing column', 'compare each row to every other row in the table on some condition'],
+  'Conditional Aggregation': ['use SUM(CASE WHEN ...) to total one category per group', 'use COUNT(CASE WHEN ...) to count rows meeting a condition per group', 'pivot several category counts into separate columns in one row per group'],
+  'String Aggregation':   ['use GROUP_CONCAT to list values within a group as one string', 'use GROUP_CONCAT with a custom separator', 'combine GROUP_CONCAT with DISTINCT to remove duplicate values'],
+  'Anti-Joins':           ['find rows in the left table with no matching row in the right table', 'use LEFT JOIN ... WHERE right.key IS NULL to find unmatched rows', 'contrast an anti-join result with what an INNER JOIN would return'],
   // ── Advanced ──
   'CTEs':                 ['use a CTE to pre-filter before the main query', 'use a CTE to compute an aggregate reused in the main query'],
   'Multiple CTEs':        ['chain two CTEs where the second references the first', 'define two independent CTEs and join them in the main query'],
@@ -219,6 +231,8 @@ const TOPIC_ANGLES = {
   'Correlated Subqueries':['use a correlated subquery in WHERE to filter by a per-row aggregate', 'use a correlated subquery in SELECT to add a computed column'],
   'EXISTS / NOT EXISTS':  ['use EXISTS to find rows with at least one matching related row', 'use NOT EXISTS to find rows with no matches'],
   'INTERSECT & EXCEPT':   ['use EXCEPT to find rows in one set but not another', 'use INTERSECT to find common rows between two queries'],
+  'Window Frames':        ['compute a moving average over a fixed number of preceding rows with ROWS BETWEEN', 'compute a moving sum over a small window centered on the current row', 'compare a default running total to a bounded window frame'],
+  'PERCENT_RANK & CUME_DIST': ['use PERCENT_RANK to find each row\'s relative position within its partition', 'use CUME_DIST to find the cumulative proportion of rows at or below the current value', 'filter rows above a given percentile threshold'],
   // ── Legacy keys ──
   'SUBQUERY':             ['use a subquery in WHERE with IN', 'use a subquery in the FROM clause as a derived table', 'use EXISTS'],
   'AGGREGATE FUNCTIONS':  ['combine multiple aggregates in one query', 'use aggregate on a filtered subset', 'combine with GROUP BY'],
@@ -442,6 +456,32 @@ function rowsPrefixEqual(expected, actual) {
   return true;
 }
 
+// Order-independent containment check: every row in `shorter` matches an
+// unused equal row in `longer` (duplicate counts respected).
+function rowsMultisetSubset(shorter, longer) {
+  if (shorter.length > longer.length) return false;
+  const freq = new Map();
+  for (const row of longer) {
+    const key = JSON.stringify(normRow(row));
+    freq.set(key, (freq.get(key) || 0) + 1);
+  }
+  for (const row of shorter) {
+    const key = JSON.stringify(normRow(row));
+    const count = freq.get(key) || 0;
+    if (count === 0) return false;
+    freq.set(key, count - 1);
+  }
+  return true;
+}
+
+// Reverse of rowsPrefixEqual: used when the USER's query adds a LIMIT that
+// the expected solution doesn't have, so their (shorter) result should still
+// be accepted if it's a valid subset of the full expected result — a prefix
+// when the solution is ordered, or any matching subset otherwise.
+function rowsAreValidSubset(shorter, longer, ordered) {
+  return ordered ? rowsPrefixEqual(shorter, longer) : rowsMultisetSubset(shorter, longer);
+}
+
 app.post('/api/generate-problem', async (req, res) => {
   try {
     const { db, topic } = req.body;
@@ -583,6 +623,11 @@ app.post('/api/check-answer', (req, res) => {
       if (!correct && hasTrailingLimit(pending.sql)) {
         correct = rowsPrefixEqual(expectedCmp, actualCmp);
       }
+      // Accept the reverse: the user added a LIMIT the solution doesn't have,
+      // so their shorter result should still count if it's a valid subset.
+      if (!correct && hasTrailingLimit(query) && actualCmp.length < expectedCmp.length) {
+        correct = rowsAreValidSubset(actualCmp, expectedCmp, ordered);
+      }
       res.json({ correct, actual: actualRows, expected: pending.expectedRows });
     } catch (e) {
       res.status(400).json({ error: e.message });
@@ -684,6 +729,7 @@ async function warmUpOllama() {
 module.exports = app;
 module.exports.resultSetsEqual = resultSetsEqual;
 module.exports.rowsPrefixEqual = rowsPrefixEqual;
+module.exports.rowsAreValidSubset = rowsAreValidSubset;
 module.exports.expectsOrder = expectsOrder;
 module.exports.normScalar = normScalar;
 module.exports.queryRowsPositional = queryRowsPositional;

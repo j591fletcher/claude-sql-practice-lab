@@ -7,12 +7,15 @@ const TOPICS = {
   intermediate: [
     'GROUP BY', 'HAVING', 'JOINs', 'UNION / UNION ALL', 'Subqueries',
     'CASE WHEN', 'COALESCE', 'String Functions', 'CAST',
+    'Date & Time Functions', 'Self Joins', 'Conditional Aggregation',
+    'String Aggregation', 'Anti-Joins',
   ],
   advanced: [
     'CTEs', 'Recursive CTEs', 'ROW_NUMBER',
     'RANK & DENSE_RANK', 'PARTITION BY', 'LAG & LEAD',
     'FIRST_VALUE & LAST_VALUE', 'NTILE', 'Running Totals',
     'Correlated Subqueries', 'EXISTS / NOT EXISTS', 'INTERSECT & EXCEPT',
+    'Window Frames', 'PERCENT_RANK & CUME_DIST',
   ],
 };
 

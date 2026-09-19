@@ -1,4 +1,4 @@
-const { resultSetsEqual, rowsPrefixEqual, expectsOrder, normScalar } = require('../server');
+const { resultSetsEqual, rowsPrefixEqual, rowsAreValidSubset, expectsOrder, normScalar } = require('../server');
 
 // Rows arrive from node-sqlite3 as objects keyed by output column name. The
 // comparator grades positionally (by value order), so differing aliases between
@@ -135,6 +135,40 @@ describe('rowsPrefixEqual', () => {
 
   test('rejects when actual has fewer rows than expected', () => {
     expect(rowsPrefixEqual([{ n: 1 }, { n: 2 }], [{ n: 1 }])).toBe(false);
+  });
+});
+
+// ── rowsAreValidSubset (student added a LIMIT the solution doesn't have) ─────
+
+describe('rowsAreValidSubset', () => {
+  test('ordered: accepts when the shorter result is an ordered prefix of the full result', () => {
+    const shorter = [{ name: 'Salmon' }, { name: 'Bass' }];
+    const longer = [{ x: 'Salmon' }, { x: 'Bass' }, { x: 'Carp' }];
+    expect(rowsAreValidSubset(shorter, longer, true)).toBe(true);
+  });
+
+  test('ordered: rejects when the shorter result is not the correct prefix', () => {
+    const shorter = [{ name: 'Bass' }, { name: 'Salmon' }];
+    const longer = [{ x: 'Salmon' }, { x: 'Bass' }, { x: 'Carp' }];
+    expect(rowsAreValidSubset(shorter, longer, true)).toBe(false);
+  });
+
+  test('unordered: accepts when the shorter result is any matching subset', () => {
+    const shorter = [{ name: 'Carp' }, { name: 'Salmon' }];
+    const longer = [{ x: 'Salmon' }, { x: 'Bass' }, { x: 'Carp' }];
+    expect(rowsAreValidSubset(shorter, longer, false)).toBe(true);
+  });
+
+  test('unordered: respects duplicate counts (cannot reuse the same row twice)', () => {
+    const shorter = [{ n: 1 }, { n: 1 }];
+    const longer = [{ n: 1 }, { n: 2 }, { n: 3 }];
+    expect(rowsAreValidSubset(shorter, longer, false)).toBe(false);
+  });
+
+  test('unordered: rejects when a row does not exist in the full result', () => {
+    const shorter = [{ name: 'Trout' }];
+    const longer = [{ x: 'Salmon' }, { x: 'Bass' }, { x: 'Carp' }];
+    expect(rowsAreValidSubset(shorter, longer, false)).toBe(false);
   });
 });
 
